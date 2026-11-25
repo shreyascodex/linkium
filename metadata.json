@@ -1,0 +1,6 @@
+{
+  "name": "LINKIUM — Opportunity Discovery & Collaboration Platform",
+  "description": "Discover opportunities, meet people who share your ambitions, and turn ideas into meaningful projects. Launching first in Nepal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
