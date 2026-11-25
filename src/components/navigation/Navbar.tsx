@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { Button } from '@/src/components/ui/Button';
 import { PageContainer } from '@/src/components/layout/PageContainer';
+import { useAuth } from '@/src/hooks/useAuth';
 import { cn } from '@/src/lib/cn';
 
 const NAV_LINKS = [
@@ -17,6 +18,14 @@ const NAV_LINKS = [
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, profile, logout } = useAuth();
+
+  const onboardingDone = Boolean(
+    profile?.onboardingCompleted ?? user?.onboardingCompleted
+  );
+  const appTarget = onboardingDone ? '/dashboard' : '/onboarding';
+  const appLabel = onboardingDone ? 'Dashboard' : 'Continue Setup';
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -30,6 +39,11 @@ export function Navbar() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mobileMenuOpen]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#FFFFFF]/95 backdrop-blur-sm border-b border-[#E2E8F0]">
@@ -62,15 +76,32 @@ export function Navbar() {
           </nav>
 
           <div className="hidden lg:flex items-center gap-4 shrink-0">
-            <Link
-              to="/login"
-              className="text-sm font-medium text-[#64748B] hover:text-[#0F172A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]"
-            >
-              Sign In
-            </Link>
-            <Button to="/register" variant="primary" size="sm">
-              Get Started
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="text-sm font-medium text-[#64748B] hover:text-[#0F172A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]"
+                >
+                  Sign Out
+                </button>
+                <Button to={appTarget} variant="primary" size="sm">
+                  {appLabel}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-sm font-medium text-[#64748B] hover:text-[#0F172A] transition-colors whitespace-nowrap shrink-0 px-2 py-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]"
+                >
+                  Sign In
+                </Link>
+                <Button to="/register" variant="primary" size="sm">
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
 
           <button
@@ -113,12 +144,30 @@ export function Navbar() {
             </nav>
 
             <div className="mt-3 pt-3 border-t border-[#E2E8F0] flex flex-col gap-2">
-              <Button to="/login" variant="outline" size="md" fullWidth>
-                Sign In
-              </Button>
-              <Button to="/register" variant="primary" size="md" fullWidth>
-                Get Started
-              </Button>
+              {isAuthenticated ? (
+                <>
+                  <Button to={appTarget} variant="primary" size="md" fullWidth>
+                    {appLabel}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="md"
+                    fullWidth
+                    onClick={() => void handleLogout()}
+                  >
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button to="/login" variant="outline" size="md" fullWidth>
+                    Sign In
+                  </Button>
+                  <Button to="/register" variant="primary" size="md" fullWidth>
+                    Get Started
+                  </Button>
+                </>
+              )}
             </div>
           </PageContainer>
         </div>

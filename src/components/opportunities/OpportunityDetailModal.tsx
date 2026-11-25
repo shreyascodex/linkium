@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Bookmark, Check, Clock, Info, MapPin, User } from 'lucide-react';
 import { Opportunity } from '@/src/types/opportunity';
+import { useAuth } from '@/src/hooks/useAuth';
 import { Modal } from '@/src/components/ui/Modal';
 import { Badge } from '@/src/components/ui/Badge';
 import { Button } from '@/src/components/ui/Button';
@@ -15,6 +16,7 @@ export function OpportunityDetailModal({
   onClose,
 }: OpportunityDetailModalProps) {
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const { isAuthenticated } = useAuth();
 
   if (!opportunity) return null;
 
@@ -41,7 +43,7 @@ export function OpportunityDetailModal({
         <div className="p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex items-start gap-2.5 text-xs text-[#64748B] leading-relaxed">
           <Info className="w-4 h-4 text-[#4F46E5] shrink-0 mt-0.5" aria-hidden="true" />
           <span>
-            This is a demonstration listing created for Stage 1 platform evaluation. Live applications and messaging will open in a later stage.
+            This is a demonstration listing created for platform evaluation. Live applications and messaging will open in Stage 3.
           </span>
         </div>
 
@@ -110,9 +112,15 @@ export function OpportunityDetailModal({
               </>
             )}
           </Button>
-          <Button to="/register" variant="primary" size="md" onClick={onClose}>
-            Request Beta Access to Connect
-          </Button>
+          {isAuthenticated ? (
+            <Button variant="primary" size="md" onClick={onClose}>
+              Done Exploring
+            </Button>
+          ) : (
+            <Button to="/register" variant="primary" size="md" onClick={onClose}>
+              Create Account to Connect
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

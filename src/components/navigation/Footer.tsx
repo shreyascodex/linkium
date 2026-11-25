@@ -97,8 +97,8 @@ export function Footer() {
                 <Link
                   key={social.id}
                   to={`/contact?channel=${social.id}`}
-                  aria-label={`${social.label} (configurable placeholder)`}
-                  title={`${social.label} — placeholder link`}
+                  aria-label={social.label}
+                  title={social.label}
                   className="p-2 rounded-lg border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] hover:border-[#CBD5E1] transition-colors"
                 >
                   {getSocialIcon(social.id)}
@@ -113,7 +113,7 @@ export function Footer() {
             © {BRAND_CONFIG.copyrightYear} {BRAND_CONFIG.name}. All rights reserved.
           </p>
           <p>
-            Stage 1 Public Foundation · Demonstration data only
+            Invite-Only Beta · Opportunity directory shows sample listings
           </p>
         </div>
       </PageContainer>

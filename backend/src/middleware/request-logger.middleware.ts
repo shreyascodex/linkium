@@ -21,7 +21,7 @@ export function requestLoggerMiddleware(
     if (res.statusCode >= 500) {
       logger.error(logPayload, 'HTTP request failed');
     } else if (res.statusCode >= 400) {
-      logger.warn(logPayload, 'HTTP request returned client error');
+      logger.info(logPayload, 'HTTP request returned client status');
     } else {
       logger.info(logPayload, 'HTTP request completed');
     }

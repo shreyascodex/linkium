@@ -1,11 +1,29 @@
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/src/lib/cn';
 
 export interface LoadingStateProps {
   count?: number;
+  label?: string;
   className?: string;
 }
 
-export function LoadingState({ count = 4, className }: LoadingStateProps) {
+export function LoadingState({ count = 4, label, className }: LoadingStateProps) {
+  if (label) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          'flex flex-col items-center justify-center gap-3 text-center py-6',
+          className
+        )}
+      >
+        <Loader2 className="w-6 h-6 animate-spin text-[#4F46E5]" aria-hidden="true" />
+        <p className="text-sm font-medium text-[#64748B]">{label}</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn('grid grid-cols-1 md:grid-cols-2 gap-6', className)}

@@ -106,7 +106,7 @@ export function OpportunitiesPage() {
           <div className="mt-6 p-3.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex items-start gap-2.5 text-xs text-[#64748B]">
             <Info className="w-4 h-4 text-[#4F46E5] shrink-0 mt-0.5" aria-hidden="true" />
             <span>
-              <strong className="font-semibold text-[#0F172A]">Demonstration Data Notice:</strong> The listings below are realistic sample records for Stage 1 UI testing and are not live open postings.
+              <strong className="font-semibold text-[#0F172A]">Demonstration Data Notice:</strong> The listings below are sample records for beta preview and are not live open postings.
             </span>
           </div>
         </PageContainer>

@@ -218,7 +218,7 @@ export function HeroProductPreview() {
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs text-[#64748B] inline-flex items-center gap-1.5">
                 <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
-                Stage 1 Interactive Mockup
+                Interactive Product Preview
               </span>
               <Link
                 to="/how-it-works"

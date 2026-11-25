@@ -15,38 +15,38 @@ export function LegalPage({ type }: LegalPageProps) {
         <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl p-7 sm:p-10 flex flex-col gap-6">
           <div className="border-b border-[#E2E8F0] pb-5">
             <span className="text-xs font-semibold tracking-wider uppercase text-[#4F46E5]">
-              Stage 1 Legal Placeholder
+              Nepal Invite-Only Beta
             </span>
             <h1 className="text-3xl font-bold text-[#0F172A] mt-2">
               {isPrivacy ? 'Privacy Policy' : 'Terms of Service'}
             </h1>
             <p className="text-xs text-[#64748B] mt-2">
-              {BRAND_CONFIG.name} · Draft placeholder for pre-beta public preview
+              {BRAND_CONFIG.name} · Beta Platform Notice
             </p>
           </div>
 
           {isPrivacy ? (
             <div className="space-y-4 text-sm text-[#475569] leading-relaxed">
               <p>
-                During Stage 1 of the {BRAND_CONFIG.name} public website foundation, no backend database, user authentication system, or persistent personal data storage is active.
+                During the {BRAND_CONFIG.name} invite-only beta, we collect only the information required to operate member accounts and personalized onboarding: your invited email address, securely hashed password (Argon2id), chosen identity mode (real or pseudonymous), and optional profile details, skills, interests, and goals.
               </p>
               <p>
-                Entries typed into preview forms (such as sign-in, registration, or contact previews) remain strictly in temporary browser memory for UI validation and are never transmitted to external servers or stored in localStorage.
+                Authentication relies on secure, HttpOnly session cookies and session-bound CSRF protection rather than browser localStorage. Single-use verification and password reset tokens are stored strictly as cryptographic hashes and expire automatically.
               </p>
               <p>
-                Full privacy disclosures, data retention policies, and regional compliance notices will be published prior to opening the Nepal invite-only beta.
+                Your account email remains private and is never sold or shared for third-party advertising. You may update your identity visibility, profile information, or password at any time from Profile &amp; Settings.
               </p>
             </div>
           ) : (
             <div className="space-y-4 text-sm text-[#475569] leading-relaxed">
               <p>
-                This website represents Stage 1 of the {BRAND_CONFIG.name} platform foundation. All listed opportunities, profiles, and collaboration briefs are demonstration examples only.
+                Access to {BRAND_CONFIG.name} member accounts during the initial Nepal rollout requires a valid single-use invitation and verified email address. Members are responsible for maintaining accurate or respectful pseudonymous profiles in line with community trust standards.
               </p>
               <p>
-                No commercial transactions, live applications, or binding commitments are executed through this preview build. Paid organization plans remain marked as Coming Soon.
+                Opportunity listings currently displayed in the public and member discovery directory are sample demonstration records used to illustrate platform categories and scoping. No commercial transactions or paid organization subscriptions are active during the beta.
               </p>
               <p>
-                Complete terms governing community conduct, opportunity postings, and organization accounts will accompany Stage 2 platform onboarding.
+                We reserve the right to suspend accounts that misuse invitations, automate credential stuffing, or distribute harmful content.
               </p>
             </div>
           )}

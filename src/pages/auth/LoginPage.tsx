@@ -1,28 +1,88 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CheckCircle2, Eye, EyeOff, Info } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { BRAND_CONFIG } from '@/src/config/brand';
+import { useAuth } from '@/src/hooks/useAuth';
+import { ApiClientError } from '@/src/services/api';
+import { authService } from '@/src/services/auth.service';
 import { validateLoginForm } from '@/src/lib/validation';
 import { PageContainer } from '@/src/components/layout/PageContainer';
 import { Input } from '@/src/components/ui/Input';
 import { Button } from '@/src/components/ui/Button';
 
 export function LoginPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<'email' | 'password', string>>>({});
-  const [previewSubmitted, setPreviewSubmitted] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [resendStatus, setResendStatus] = useState<{
+    sending: boolean;
+    message: string | null;
+    error: string | null;
+  }>({ sending: false, message: null, error: null });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
+    setNeedsVerification(false);
+    setResendStatus({ sending: false, message: null, error: null });
+
     const validation = validateLoginForm({ email, password });
     if (!validation.isValid) {
       setErrors(validation.errors);
       return;
     }
+
     setErrors({});
-    setPreviewSubmitted(true);
+    setSubmitting(true);
+
+    try {
+      const { user, profile } = await login({
+        email: email.trim(),
+        password,
+      });
+
+      const onboardingDone = Boolean(
+        profile?.onboardingCompleted ?? user.onboardingCompleted
+      );
+      navigate(onboardingDone ? '/dashboard' : '/onboarding', { replace: true });
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        if (error.primaryCode === 'EMAIL_NOT_VERIFIED') {
+          setNeedsVerification(true);
+        }
+        setServerError(error.message);
+      } else {
+        setServerError('Unable to sign in right now. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email.trim()) return;
+    setResendStatus({ sending: true, message: null, error: null });
+    try {
+      const res = await authService.resendVerification(email.trim());
+      setResendStatus({ sending: false, message: res.message, error: null });
+    } catch (error) {
+      setResendStatus({
+        sending: false,
+        message: null,
+        error:
+          error instanceof ApiClientError
+            ? error.message
+            : 'Unable to resend verification email.',
+      });
+    }
   };
 
   return (
@@ -34,70 +94,100 @@ export function LoginPage() {
               Sign in to {BRAND_CONFIG.name}
             </h1>
             <p className="text-sm text-[#64748B]">
-              Enter your credentials to preview the sign-in workflow.
+              Access your profile, onboarding, and personalized opportunity discovery.
             </p>
           </div>
 
-          <div className="mb-6 p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] flex items-start gap-2.5 text-xs text-[#64748B] leading-relaxed">
-            <Info className="w-4 h-4 text-[#4F46E5] shrink-0 mt-0.5" aria-hidden="true" />
-            <span>
-              Stage 1 visual preview only. Real user authentication and account sessions will be introduced in a future stage.
-            </span>
-          </div>
+          {serverError && (
+            <div
+              role="alert"
+              className="mb-5 p-3.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] flex flex-col gap-2.5 text-xs text-[#B91C1C]"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{serverError}</span>
+              </div>
 
-          {previewSubmitted ? (
-            <div className="py-4 flex flex-col gap-4">
-              <div className="p-4 rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[#16A34A] shrink-0 mt-0.5" aria-hidden="true" />
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-semibold text-[#0F172A]">
-                    Form validation passed
-                  </p>
-                  <p className="text-xs text-[#475569] leading-relaxed">
-                    Input checks succeeded for <span className="font-medium">{email}</span>. No session or localStorage state was created because authentication is disabled in Stage 1.
-                  </p>
+              {needsVerification && (
+                <div className="pl-6">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendStatus.sending}
+                    className="font-semibold text-[#4F46E5] hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    {resendStatus.sending
+                      ? 'Sending verification email...'
+                      : 'Resend verification email'}
+                  </button>
                 </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button to="/opportunities" variant="primary" size="md" fullWidth>
-                  Explore Demo Opportunities
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  fullWidth
-                  onClick={() => {
-                    setPreviewSubmitted(false);
-                    setPassword('');
-                  }}
-                >
-                  Reset Form
-                </Button>
-              </div>
+              )}
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-              <Input
-                id="login-email"
-                type="email"
-                label="Email Address"
-                placeholder="you@example.com"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                error={errors.email}
-              />
+          )}
 
-              <Input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                label="Password"
-                placeholder="Minimum 8 characters"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                error={errors.password}
-                rightAdornment={
+          {resendStatus.message && (
+            <div
+              role="status"
+              className="mb-5 p-3 rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] flex items-start gap-2.5 text-xs text-[#166534]"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>{resendStatus.message}</span>
+            </div>
+          )}
+
+          {resendStatus.error && (
+            <div
+              role="alert"
+              className="mb-5 p-3 rounded-lg bg-[#FEF2F2] border border-[#FECACA] flex items-start gap-2.5 text-xs text-[#B91C1C]"
+            >
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+              <span>{resendStatus.error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+            <Input
+              id="login-email"
+              type="email"
+              label="Email Address"
+              placeholder="you@example.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+            />
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="login-password"
+                  className="text-sm font-medium text-[#0F172A]"
+                >
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-[#4F46E5] hover:text-[#4338CA] hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={Boolean(errors.password)}
+                  className={`w-full h-11 px-3.5 pr-11 rounded-lg bg-[#FFFFFF] text-sm text-[#0F172A] placeholder:text-[#94A3B8] border transition-colors focus:outline-none focus:ring-2 ${
+                    errors.password
+                      ? 'border-[#DC2626] focus:border-[#DC2626] focus:ring-[#DC2626]/20'
+                      : 'border-[#E2E8F0] focus:border-[#4F46E5] focus:ring-[#4F46E5]/20'
+                  }`}
+                />
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2.5">
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
@@ -110,19 +200,37 @@ export function LoginPage() {
                       <Eye className="w-4 h-4" aria-hidden="true" />
                     )}
                   </button>
-                }
-              />
-
-              <div className="pt-2">
-                <Button type="submit" variant="primary" size="lg" fullWidth>
-                  Sign In
-                </Button>
+                </div>
               </div>
-            </form>
-          )}
+              {errors.password && (
+                <p className="text-xs text-[#DC2626]" role="alert">
+                  {errors.password}
+                </p>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    Signing In...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </Button>
+            </div>
+          </form>
 
           <div className="mt-6 pt-5 border-t border-[#E2E8F0] text-center text-sm text-[#64748B]">
-            New to {BRAND_CONFIG.name}?{' '}
+            Have an invitation to {BRAND_CONFIG.name}?{' '}
             <Link
               to="/register"
               className="font-medium text-[#4F46E5] hover:text-[#4338CA] hover:underline"

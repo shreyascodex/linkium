@@ -4,6 +4,7 @@ export interface ValidationResult<T extends string> {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_PATTERN = /^[a-z0-9_]{3,30}$/;
 
 export function validateEmail(email: string): string | null {
   const trimmed = email.trim();
@@ -12,6 +13,60 @@ export function validateEmail(email: string): string | null {
   }
   if (!EMAIL_PATTERN.test(trimmed)) {
     return 'Please enter a valid email address.';
+  }
+  return null;
+}
+
+export interface PasswordStrengthResult {
+  score: number;
+  label: string;
+  isValid: boolean;
+  checks: Array<{ id: string; label: string; passed: boolean }>;
+}
+
+export function evaluatePasswordStrength(password: string): PasswordStrengthResult {
+  const checks = [
+    { id: 'length', label: 'At least 8 characters', passed: password.length >= 8 },
+    { id: 'lower', label: 'One lowercase letter', passed: /[a-z]/.test(password) },
+    { id: 'upper', label: 'One uppercase letter', passed: /[A-Z]/.test(password) },
+    { id: 'digit', label: 'One number', passed: /\d/.test(password) },
+    {
+      id: 'special',
+      label: 'One special character',
+      passed: /[^A-Za-z0-9]/.test(password),
+    },
+  ];
+  const score = checks.filter((c) => c.passed).length;
+  const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
+  return {
+    score,
+    label: score === 0 ? 'Too Short' : labels[score - 1],
+    isValid: score === checks.length && password.length <= 128,
+    checks,
+  };
+}
+
+export function validateStrongPassword(password: string): string | null {
+  if (!password) {
+    return 'Password is required.';
+  }
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (password.length > 128) {
+    return 'Password must not exceed 128 characters.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must include at least one lowercase letter.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must include at least one uppercase letter.';
+  }
+  if (!/\d/.test(password)) {
+    return 'Password must include at least one number.';
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return 'Password must include at least one special character.';
   }
   return null;
 }
@@ -27,8 +82,6 @@ export function validateLoginForm(values: {
   }
   if (!values.password) {
     errors.password = 'Password is required.';
-  } else if (values.password.length < 8) {
-    errors.password = 'Password must be at least 8 characters.';
   }
 
   return {
@@ -38,21 +91,25 @@ export function validateLoginForm(values: {
 }
 
 export function validateRegisterForm(values: {
-  fullName: string;
+  invitationToken: string;
   email: string;
-  role: string;
   password: string;
   confirmPassword: string;
   acceptedTerms: boolean;
-}): ValidationResult<'fullName' | 'email' | 'role' | 'password' | 'confirmPassword' | 'acceptedTerms'> {
+}): ValidationResult<
+  'invitationToken' | 'email' | 'password' | 'confirmPassword' | 'acceptedTerms'
+> {
   const errors: Partial<
-    Record<'fullName' | 'email' | 'role' | 'password' | 'confirmPassword' | 'acceptedTerms', string>
+    Record<
+      'invitationToken' | 'email' | 'password' | 'confirmPassword' | 'acceptedTerms',
+      string
+    >
   > = {};
 
-  if (!values.fullName.trim()) {
-    errors.fullName = 'Full name is required.';
-  } else if (values.fullName.trim().length < 2) {
-    errors.fullName = 'Full name must be at least 2 characters.';
+  if (!values.invitationToken.trim()) {
+    errors.invitationToken = 'An invitation token is required to register.';
+  } else if (values.invitationToken.trim().length < 16) {
+    errors.invitationToken = 'Invitation token appears invalid.';
   }
 
   const emailError = validateEmail(values.email);
@@ -60,14 +117,9 @@ export function validateRegisterForm(values: {
     errors.email = emailError;
   }
 
-  if (!values.role) {
-    errors.role = 'Please select how you plan to use the platform.';
-  }
-
-  if (!values.password) {
-    errors.password = 'Password is required.';
-  } else if (values.password.length < 8) {
-    errors.password = 'Use at least 8 characters for your password.';
+  const passwordError = validateStrongPassword(values.password);
+  if (passwordError) {
+    errors.password = passwordError;
   }
 
   if (!values.confirmPassword) {
@@ -77,7 +129,118 @@ export function validateRegisterForm(values: {
   }
 
   if (!values.acceptedTerms) {
-    errors.acceptedTerms = 'Please acknowledge the Stage 1 preview terms.';
+    errors.acceptedTerms = 'Please accept the Terms of Service and Privacy Policy.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validateResetPasswordForm(values: {
+  newPassword: string;
+  confirmPassword: string;
+}): ValidationResult<'newPassword' | 'confirmPassword'> {
+  const errors: Partial<Record<'newPassword' | 'confirmPassword', string>> = {};
+
+  const pwError = validateStrongPassword(values.newPassword);
+  if (pwError) {
+    errors.newPassword = pwError;
+  }
+
+  if (!values.confirmPassword) {
+    errors.confirmPassword = 'Please confirm your new password.';
+  } else if (values.newPassword !== values.confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function validateChangePasswordForm(values: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}): ValidationResult<'currentPassword' | 'newPassword' | 'confirmPassword'> {
+  const errors: Partial<
+    Record<'currentPassword' | 'newPassword' | 'confirmPassword', string>
+  > = {};
+
+  if (!values.currentPassword) {
+    errors.currentPassword = 'Current password is required.';
+  }
+
+  const pwError = validateStrongPassword(values.newPassword);
+  if (pwError) {
+    errors.newPassword = pwError;
+  } else if (values.currentPassword === values.newPassword) {
+    errors.newPassword = 'New password must differ from your current password.';
+  }
+
+  if (!values.confirmPassword) {
+    errors.confirmPassword = 'Please confirm your new password.';
+  } else if (values.newPassword !== values.confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match.';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+export function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function validateProfileDetailsForm(values: {
+  username: string;
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  location: string;
+}): ValidationResult<'username' | 'displayName' | 'bio' | 'avatarUrl' | 'location'> {
+  const errors: Partial<
+    Record<'username' | 'displayName' | 'bio' | 'avatarUrl' | 'location', string>
+  > = {};
+
+  const normalizedUsername = values.username.trim().toLowerCase();
+  if (!normalizedUsername) {
+    errors.username = 'Username is required.';
+  } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
+    errors.username =
+      'Use 3–30 lowercase letters, numbers, or underscores only.';
+  }
+
+  const displayName = values.displayName.trim();
+  if (!displayName) {
+    errors.displayName = 'Display name is required.';
+  } else if (displayName.length < 2) {
+    errors.displayName = 'Display name must be at least 2 characters.';
+  } else if (displayName.length > 100) {
+    errors.displayName = 'Display name must not exceed 100 characters.';
+  }
+
+  if (values.bio.trim().length > 500) {
+    errors.bio = 'Bio must not exceed 500 characters.';
+  }
+
+  if (values.location.trim().length > 120) {
+    errors.location = 'Location must not exceed 120 characters.';
+  }
+
+  const avatar = values.avatarUrl.trim();
+  if (avatar && !isValidHttpUrl(avatar)) {
+    errors.avatarUrl = 'Avatar URL must begin with http:// or https://.';
   }
 
   return {

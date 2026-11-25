@@ -167,7 +167,7 @@ export function HomePage() {
           <SectionHeading
             eyebrow="Demonstration Listings · Nepal"
             title="Featured opportunities"
-            description="Sample opportunities illustrating how projects, internships, challenges, and learning circles are structured. These examples are demonstration data for Stage 1."
+            description="Sample opportunities illustrating how projects, internships, challenges, and learning circles are structured during the beta."
             action={
               <Button to="/opportunities" variant="outline" size="md">
                 View All Demo Opportunities

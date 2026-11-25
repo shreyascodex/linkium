@@ -8,30 +8,33 @@ LINKIUM is an opportunity-driven ecosystem launching initially in Nepal via an i
 
 ## Repository Structure
 
-To preserve the existing Stage 1 React/Vite build at the repository root while introducing a clean backend workspace, the repository is organized as:
-
 ```text
 .
-├── src/                    # Stage 1 React + TypeScript + Tailwind frontend
+├── src/                        # Stage 1 React + TypeScript + Tailwind frontend
 ├── index.html
-├── package.json            # Frontend dependencies and Vite scripts
+├── package.json                # Frontend dependencies and Vite scripts
 ├── vite.config.ts
-├── backend/                # Stage 2A Node.js + Express + Prisma backend
+├── backend/                    # Stage 2A + 2B Node.js + Express + Prisma backend
 │   ├── prisma/
-│   │   └── schema.prisma   # PostgreSQL schema
+│   │   └── schema.prisma       # PostgreSQL schema
 │   ├── src/
-│   │   ├── config/         # Zod env validation, Pino logger, Prisma client
-│   │   ├── middleware/     # Request ID, logging, Zod validation, 404, errors
-│   │   ├── routes/         # /api/v1/health
-│   │   ├── utils/          # Standardized API response & AppError helpers
-│   │   ├── app.ts          # Express application factory (testable)
-│   │   └── server.ts       # HTTP server startup & graceful shutdown
-│   ├── tests/              # Vitest + Supertest integration & unit tests
+│   │   ├── config/             # Zod env validation, Pino logger, Prisma client
+│   │   ├── emails/             # Email provider abstraction (console, Resend) & templates
+│   │   ├── middleware/         # Request ID, logging, origin, CSRF, auth, rate-limit, Zod, errors
+│   │   ├── modules/
+│   │   │   └── auth/           # Registration, verification, login, sessions, password reset
+│   │   ├── routes/             # /api/v1/health, /api/v1/auth, /api/v1/invitations
+│   │   ├── scripts/            # Admin/dev CLI scripts (create-invitation.ts)
+│   │   ├── types/              # Express Request augmentation
+│   │   ├── utils/              # API responses, cookies, Argon2id/SHA-256/HMAC crypto
+│   │   ├── app.ts              # Express application factory (testable)
+│   │   └── server.ts           # HTTP server startup & graceful shutdown
+│   ├── tests/                  # Vitest + Supertest unit, HTTP, and PostgreSQL integration tests
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
 └── docs/
-    └── API.md              # Backend API contract documentation
+    └── API.md                  # Full API contract & Stage 2D integration guide
 ```
 
 ---
@@ -40,7 +43,7 @@ To preserve the existing Stage 1 React/Vite build at the repository root while i
 
 - **Node.js**: `>= 20.0.0` (verified on Node `22.x`)
 - **npm**: `>= 10.0.0`
-- **PostgreSQL**: `>= 14` (local installation or Docker container)
+- **PostgreSQL**: `>= 14` (local installation, managed PostgreSQL, or Docker)
 
 ---
 
@@ -57,7 +60,7 @@ npm run lint      # TypeScript check (tsc --noEmit)
 
 ---
 
-## Backend Setup (Stage 2A)
+## Backend Setup (Stage 2A + Stage 2B)
 
 ### 1. Install Backend Dependencies
 
@@ -68,7 +71,7 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Copy `backend/.env.example` to `backend/.env` and update `DATABASE_URL` with your local PostgreSQL credentials.
+Copy `backend/.env.example` to `backend/.env` and configure values. Never commit `.env`.
 
 **macOS / Linux:**
 ```bash
@@ -87,18 +90,25 @@ Environment variables (`backend/.env`):
 | `NODE_ENV` | No | `development` | `development`, `test`, or `production` |
 | `PORT` | No | `5000` | Backend HTTP port |
 | `DATABASE_URL` | **Yes** | — | PostgreSQL connection string (`postgresql://user:pass@host:5432/db`) |
-| `FRONTEND_URL` | No | `http://localhost:5173` | Allowed CORS origin(s), comma-separated |
-| `LOG_LEVEL` | No | `info` | Pino log level (`fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent`) |
+| `FRONTEND_URL` | No | `http://localhost:5173` | Allowed CORS & Origin URLs (comma-separated) |
+| `APP_BASE_URL` | No | `http://localhost:3000` | Base frontend URL used in verification/reset/invite links |
+| `COOKIE_SAME_SITE` | No | `lax` | `lax` (same-origin / Vite proxy) or `none` (cross-origin HTTPS) |
+| `SESSION_SECRET` | Prod **Yes** | Ephemeral in dev/test | >= 32-character secret for session-bound CSRF token derivation |
+| `EMAIL_PROVIDER` | No | `console` | `console` (dev/test only) or `resend` (required in production) |
+| `EMAIL_FROM` | No | `LINKIUM <no-reply@example.com>` | Verified sender address for transactional emails |
+| `EMAIL_API_KEY` | If `resend` | `""` | Resend API key (`re_...`), kept strictly in server secrets / `.env` |
+| `SESSION_MAX_AGE_DAYS` | No | `7` | Session & cookie lifetime in days |
+| `VERIFICATION_TOKEN_EXPIRY_MINUTES` | No | `30` | Email verification token TTL |
+| `PASSWORD_RESET_TOKEN_EXPIRY_MINUTES` | No | `30` | Password reset token TTL |
+| `INVITATION_EXPIRY_DAYS` | No | `7` | Invitation token TTL |
+| `RATE_LIMIT_WINDOW_MINUTES` | No | `15` | Rate-limit window in minutes |
+| `RATE_LIMIT_AUTH_MAX` | No | `20` | Max auth/invitation requests per window |
+| `RATE_LIMIT_EMAIL_MAX` | No | `5` | Max verification resend / forgot-password requests per window |
+| `LOG_LEVEL` | No | `info` | Pino log level |
 
-### 3. Prepare PostgreSQL Database
+### 3. Prepare PostgreSQL Database & Run Migrations
 
-Create a local database named `linkium`:
-
-```sql
-CREATE DATABASE linkium;
-```
-
-Or using Docker:
+Use a local Docker PostgreSQL container OR any managed cloud PostgreSQL provider (Neon, Supabase, Google Cloud SQL, Railway, Render):
 
 ```bash
 docker run --name linkium-postgres \
@@ -109,7 +119,7 @@ docker run --name linkium-postgres \
   -d postgres:16
 ```
 
-**Windows PowerShell (Docker):**
+**Windows PowerShell:**
 ```powershell
 docker run --name linkium-postgres `
   -e POSTGRES_USER=postgres `
@@ -119,20 +129,65 @@ docker run --name linkium-postgres `
   -d postgres:16
 ```
 
-### 4. Generate Prisma Client & Run Initial Migration
-
-From `backend/`:
+For cloud PostgreSQL, set `DATABASE_URL` in `backend/.env` with `?sslmode=require` (as provided by Neon/Supabase/Cloud SQL), then run from `backend/`:
 
 ```bash
 npm run db:validate   # Validate prisma/schema.prisma
 npm run db:generate   # Generate @prisma/client
-npm run db:migrate    # Create & apply initial PostgreSQL migration (e.g. name: init_stage_2a)
+npm run db:migrate    # Create & apply migration
 ```
 
-To open Prisma Studio:
+### 4. Real Transactional Email Setup (Resend)
+
+To deliver real verification and password reset emails:
+
+1. Create an API key in [Resend](https://resend.com) and verify a sending domain (or use Resend's sandbox sender for testing).
+2. Set in `backend/.env`:
+   - `EMAIL_PROVIDER="resend"`
+   - `EMAIL_API_KEY="re_your_api_key"`
+   - `EMAIL_FROM="LINKIUM <noreply@yourdomain.com>"`
+   - `APP_BASE_URL="http://localhost:3000"` (or your deployed frontend URL)
+
+---
+
+## Running Full-Stack Locally (Frontend + Backend)
+
+1. Start the backend API (`http://localhost:5000`):
+   ```bash
+   npm --prefix backend run dev
+   ```
+2. Start the frontend Vite app (`http://localhost:3000`, automatically proxying `/api/*` to `http://localhost:5000`):
+   ```bash
+   npm run dev
+   ```
+   Optional: set `VITE_API_PROXY_TARGET` to override the proxy target, or set `VITE_API_BASE_URL` for split-origin builds.
+
+---
+
+## Creating Invite-Only Beta Invitations (Dev/Admin CLI)
+
+Registration is invitation-only. Generate a single-use invitation from `backend/`:
+
 ```bash
-npm run db:studio
+npm run invite:create -- --email builder@example.com --note "Kathmandu Beta"
 ```
+
+**Windows PowerShell:**
+```powershell
+npm run invite:create -- --email "builder@example.com" --note "Kathmandu Beta"
+```
+
+This stores only the SHA-256 hash in PostgreSQL and prints the one-time invitation URL (`http://localhost:3000/register?invitation=...`) to stdout.
+
+---
+
+## Stage 2A–2D Feature Overview
+
+- **Auth Lifecycle**: Invitation validation (`/register?invitation=`), email verification (`/verify-email`), resend verification, cookie session login (`/login`), forgot/reset password (`/forgot-password`, `/reset-password`), in-session password change (`/settings`), and CSRF-protected logout.
+- **5-Step Onboarding (`/onboarding`)**: Saves Identity Mode (`REAL` or `PSEUDONYMOUS`), basic profile (`username`, `displayName`, `bio`, `avatarUrl`, `location`), searchable skills, interests, and platform goals to PostgreSQL step-by-step and restores saved progress across refreshes.
+- **Authenticated Workspace**: `DashboardLayout` sidebar, `/dashboard` (welcome header, calculated profile completion bar, skill/interest-matched opportunities, categories, quick actions), `/profile` full editor, `/settings` account/security controls, and Stage 3 preview routes (`/connections`, `/projects`, `/messages`).
+
+See `docs/API.md` for full endpoint contracts.
 
 ---
 
@@ -141,34 +196,31 @@ npm run db:studio
 From `backend/`:
 
 ```bash
-npm run dev         # Start development server with tsx watch
-npm run typecheck   # Strict TypeScript type-checking
-npm run test        # Run Vitest + Supertest suite
-npm run test:watch  # Watch mode for tests
-npm run build       # Compile TypeScript -> backend/dist/
-npm start           # Run compiled production server (node dist/server.js)
+npm run dev               # Start development server with tsx watch
+npm run typecheck         # Strict TypeScript type-checking
+npm run test              # Run Vitest unit & HTTP test suite
+npm run build             # Compile TypeScript -> backend/dist/
+npm start                 # Run compiled production server (node dist/server.js)
 ```
 
-Verify the health endpoint once PostgreSQL and the backend server are running:
+### Dedicated PostgreSQL Integration Tests
+
+Never run integration tests against a production database. Point `TEST_DATABASE_URL` to a dedicated test database:
 
 ```bash
-curl http://localhost:5000/api/v1/health
+TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/linkium_test" npm run test:integration
 ```
 
 **Windows PowerShell:**
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:5000/api/v1/health"
+$env:TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/linkium_test"
+npm run test:integration
 ```
 
 ---
 
-## Common Setup Errors
+## Cloud & Production Deployment Notes
 
-1. **`Invalid backend environment configuration: DATABASE_URL is required`**
-   - Ensure `backend/.env` exists and `DATABASE_URL` starts with `postgresql://` or `postgres://`.
-2. **`P1001: Can't reach database server at localhost:5432`**
-   - Verify PostgreSQL service or Docker container is running and credentials in `backend/.env` match.
-3. **`Origin not allowed by CORS` (`403`)**
-   - Add your frontend dev server origin (e.g. `http://localhost:3000` or `http://localhost:5173`) to `FRONTEND_URL` in `backend/.env`.
-4. **Prisma Client out of sync after schema changes**
-   - Run `npm run db:generate` inside `backend/`.
+- Set `NODE_ENV=production`, a strong `SESSION_SECRET` (`>= 32` random characters), `EMAIL_PROVIDER=resend`, and a valid `EMAIL_API_KEY` via your platform secret manager (e.g., AI Studio Secrets / Cloud Run env vars).
+- Run `npm run db:migrate:deploy` against the managed PostgreSQL database before starting `npm start`.
+- `trust proxy` is enabled automatically in `production` so rate limiting and `Secure` cookies work behind reverse proxies/load balancers.

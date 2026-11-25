@@ -1,5 +1,6 @@
+import cookieParser from 'cookie-parser';
 import cors, { type CorsOptions } from 'cors';
-import express, { type Express } from 'express';
+import express, { Router, type Express } from 'express';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
@@ -8,20 +9,19 @@ import { requestIdMiddleware } from './middleware/request-id.middleware.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.middleware.js';
 import { apiV1Router } from './routes/index.js';
 
-export function createApp(): Express {
-  const app = express();
+export function createApiRouter(): Router {
+  const apiRouter = Router();
 
-  app.disable('x-powered-by');
-  if (env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
-  }
-
-  app.use(requestIdMiddleware);
-  app.use(helmet());
+  apiRouter.use(requestIdMiddleware);
+  apiRouter.use(
+    helmet({
+      contentSecurityPolicy: false,
+      frameguard: false,
+    })
+  );
 
   const corsOptions: CorsOptions = {
     origin(origin, callback) {
-      // Allow non-browser / server-to-server requests without an Origin header
       if (!origin) {
         callback(null, true);
         return;
@@ -34,16 +34,32 @@ export function createApp(): Express {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-CSRF-Token'],
   };
 
-  app.use(cors(corsOptions));
-  app.use(express.json({ limit: '100kb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-  app.use(requestLoggerMiddleware);
+  apiRouter.use(cors(corsOptions));
+  apiRouter.use(cookieParser());
+  apiRouter.use(express.json({ limit: '100kb' }));
+  apiRouter.use(express.urlencoded({ extended: true, limit: '100kb' }));
+  apiRouter.use(requestLoggerMiddleware);
 
-  app.use('/api/v1', apiV1Router);
+  apiRouter.use('/v1', apiV1Router);
 
+  apiRouter.use(notFoundMiddleware);
+  apiRouter.use(errorMiddleware);
+
+  return apiRouter;
+}
+
+export function createApp(): Express {
+  const app = express();
+
+  app.disable('x-powered-by');
+  if (env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
+  app.use('/api', createApiRouter());
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);
 

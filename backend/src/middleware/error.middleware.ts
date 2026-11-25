@@ -29,6 +29,33 @@ function isCorsRejectedError(err: unknown): boolean {
   return err instanceof Error && err.message === 'Origin not allowed by CORS';
 }
 
+function isDatabaseUnavailableError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+  const maybeErr = err as { name?: string; code?: string; message?: string };
+  if (
+    maybeErr.name === 'PrismaClientInitializationError' ||
+    maybeErr.name === 'PrismaClientRustPanicError'
+  ) {
+    return true;
+  }
+  if (
+    maybeErr.code &&
+    ['P1000', 'P1001', 'P1002', 'P1003', 'P1008', 'P1017'].includes(maybeErr.code)
+  ) {
+    return true;
+  }
+  if (
+    typeof maybeErr.message === 'string' &&
+    (maybeErr.message.includes("Can't reach database server") ||
+      maybeErr.message.includes('ECONNREFUSED'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function errorMiddleware(
   err: unknown,
   req: Request,
@@ -106,10 +133,37 @@ export function errorMiddleware(
       );
     }
 
+    const exposeSafeUpstream =
+      err.isOperational && (err.statusCode === 502 || err.statusCode === 503);
+    const hideDetails = err.statusCode >= 500 && !exposeSafeUpstream;
+
     sendError(res, {
       statusCode: err.statusCode,
-      message: err.statusCode >= 500 ? 'Internal server error' : err.message,
-      errors: err.statusCode >= 500 ? [] : err.errors,
+      message: hideDetails ? 'Internal server error' : err.message,
+      errors: hideDetails ? [] : err.errors,
+    });
+    return;
+  }
+
+  if (isDatabaseUnavailableError(err)) {
+    logger.warn(
+      {
+        requestId: req.requestId,
+        method: req.method,
+        path: req.originalUrl,
+      },
+      'Database unavailable during API request'
+    );
+
+    sendError(res, {
+      statusCode: 503,
+      message: 'Database is unavailable',
+      errors: [
+        {
+          code: 'DATABASE_UNAVAILABLE',
+          message: 'PostgreSQL connection is currently unavailable.',
+        },
+      ],
     });
     return;
   }
